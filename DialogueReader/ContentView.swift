@@ -1,61 +1,187 @@
-//
-//  ContentView.swift
-//  DialogueReader
-//
-//  Created by Dmitry Tkachev on 13.03.2026.
-//
-
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @EnvironmentObject private var purchaseManager: PurchaseManager
+    @StateObject var viewModel: DialogueReaderViewModel
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("DialogueReader")
+                        .font(.largeTitle.bold())
+
+                    Picker("Mode", selection: $viewModel.selectedMode) {
+                        ForEach(DialogueReaderViewModel.ReaderMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
                     }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
+                    .pickerStyle(.segmented)
+
+                    TextEditor(text: $viewModel.inputText)
+                        .padding(8)
+                        .frame(minHeight: 150)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(.quaternary, lineWidth: 1)
+                        }
+
+                    HStack {
+                        Button("Manage Speakers") {
+                            viewModel.showingSpeakerManager = true
+                        }
+                        .buttonStyle(.bordered)
+
+                        Spacer()
+
+                        if viewModel.playbackManager.isPlaying {
+                            Button(viewModel.playbackManager.isPaused ? "Resume" : "Pause") {
+                                viewModel.togglePauseResume()
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button("Stop") {
+                                viewModel.stopPlayback()
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
+
+                    if viewModel.selectedMode == .standard {
+                        standardModeSection
+                    } else {
+                        dialogueModeSection
+                    }
+
+                    if let message = viewModel.userMessage {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    monetizationSection
                 }
+                .padding()
             }
-        } detail: {
-            Text("Select an item")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .sheet(isPresented: $viewModel.showingPaywall) {
+            PaywallView()
+                .environmentObject(purchaseManager)
+        }
+        .sheet(isPresented: $viewModel.showingSpeakerManager) {
+            SpeakerManagementView(viewModel: viewModel)
         }
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
+    private var standardModeSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Standard TTS")
+                .font(.headline)
+
+            Picker("Narrator", selection: Binding(
+                get: { viewModel.standardSpeakerID ?? viewModel.speakers.first?.id ?? UUID() },
+                set: { viewModel.standardSpeakerID = $0 }
+            )) {
+                ForEach(viewModel.speakers) { speaker in
+                    Text(speaker.name).tag(speaker.id)
+                }
+            }
+            .pickerStyle(.menu)
+
+            if viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("Paste or type text, then tap Play.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button("Play") {
+                viewModel.playStandardNarration()
+            }
+            .buttonStyle(.borderedProminent)
         }
     }
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+    private var dialogueModeSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Dialogue")
+                .font(.headline)
+
+            HStack {
+                Button("Split Into Segments") {
+                    viewModel.splitTextIntoSegments()
+                }
+                .buttonStyle(.borderedProminent)
+
+                Spacer()
+
+                Button("Play Full Dialogue") {
+                    viewModel.playAllSegments()
+                }
+                .buttonStyle(.borderedProminent)
             }
+
+            if viewModel.segments.isEmpty {
+                ContentUnavailableView(
+                    "No Segments Yet",
+                    systemImage: "text.quote",
+                    description: Text(viewModel.hasText ? "Tap Split Into Segments to convert each non-empty line into dialogue." : "Paste or type text to create dialogue segments.")
+                )
+            } else {
+                ForEach(viewModel.segments) { segment in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(segment.text)
+                            .font(.body)
+
+                        HStack {
+                            Picker("Speaker", selection: Binding(
+                                get: { segment.speakerID },
+                                set: { viewModel.updateSpeaker(for: segment.id, speakerID: $0) }
+                            )) {
+                                ForEach(viewModel.speakers) { speaker in
+                                    Text(speaker.name).tag(speaker.id)
+                                }
+                            }
+                            .pickerStyle(.menu)
+
+                            Spacer()
+
+                            Button("Play") {
+                                viewModel.playSegment(segment)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+                }
+            }
+        }
+    }
+
+    private var monetizationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if purchaseManager.isPremiumUnlocked {
+                Text("Premium unlocked: unlimited full-dialogue playback")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Free full-dialogue sessions remaining: \(viewModel.remainingFreeSessions)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button("Go Premium") {
+                viewModel.showingPaywall = true
+            }
+            .buttonStyle(.bordered)
         }
     }
 }
 
 #Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+    let purchase = PurchaseManager()
+    let store = SpeakerStore()
+    ContentView(viewModel: DialogueReaderViewModel(purchaseManager: purchase, speakerStore: store))
+        .environmentObject(purchase)
 }
