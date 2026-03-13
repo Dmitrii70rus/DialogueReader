@@ -40,21 +40,17 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
 }
 
 extension SpeechPlaybackManager: AVSpeechSynthesizerDelegate {
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in
-            continuation?.resume()
-            continuation = nil
-            if !synthesizer.isSpeaking {
-                isPlaying = false
-            }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        continuation?.resume()
+        continuation = nil
+        if !self.synthesizer.isSpeaking {
+            isPlaying = false
         }
     }
 
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor in
-            continuation?.resume()
-            continuation = nil
-            isPlaying = false
-        }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        continuation?.resume()
+        continuation = nil
+        isPlaying = false
     }
 }

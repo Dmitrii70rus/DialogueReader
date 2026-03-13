@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFAudio
 
 struct ContentView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
