@@ -1,0 +1,33 @@
+{
+  "identifier" : "7A5D38E4-2D24-4A0E-A2C4-6B46C4D7A9C3",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "premium_unlock",
+      "localizations" : [
+        {
+          "description" : "Unlock unlimited full-dialogue playback sessions.",
+          "displayName" : "DialogueReader Premium Unlock",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "dialoguereader.premium.unlock",
+      "referenceName" : "Premium Unlock",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "D870A589"
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
