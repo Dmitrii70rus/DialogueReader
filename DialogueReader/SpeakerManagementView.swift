@@ -96,6 +96,12 @@ struct SpeakerEditorView: View {
                     }
                 }
 
+                Section("Voice Quality") {
+                    Text(viewModel.highQualityVoiceHint)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Voice") {
                     Picker("Voice", selection: Binding(
                         get: { speaker.selectedVoiceIdentifier ?? "default" },

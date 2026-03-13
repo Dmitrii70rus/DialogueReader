@@ -72,6 +72,19 @@ final class DialogueReaderViewModel: ObservableObject {
         Array(Set(availableVoices.map(\.language))).sorted()
     }
 
+    var hasHighQualityVoicesInstalled: Bool {
+        availableVoices.contains { $0.quality == .enhanced || $0.quality == .premium }
+    }
+
+    var highQualityVoiceHint: String {
+        if hasHighQualityVoicesInstalled {
+            return "Tip: Choose Enhanced or Premium voices for the most natural local playback."
+        }
+
+        return "Higher-quality Apple voices may need downloading in Settings > Accessibility > Spoken Content > Voices."
+    }
+
+
     var canPlayFullDialogue: Bool {
         purchaseManager.isPremiumUnlocked || fullDialoguePlayCount < PurchaseManager.freePlayLimit
     }

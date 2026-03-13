@@ -108,7 +108,7 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Button("Play") {
+            Button("Play Narration") {
                 viewModel.playStandardNarration()
             }
             .buttonStyle(.borderedProminent)
@@ -159,7 +159,7 @@ struct ContentView: View {
 
                             Spacer()
 
-                            Button("Play") {
+                            Button("Play Line") {
                                 viewModel.playSegment(segment)
                             }
                             .buttonStyle(.bordered)
