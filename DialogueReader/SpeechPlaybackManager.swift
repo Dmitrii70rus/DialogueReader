@@ -1,10 +1,11 @@
 import AVFoundation
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 final class SpeechPlaybackManager: NSObject, ObservableObject {
     @Published private(set) var isPlaying = false
+    @Published private(set) var isPaused = false
 
     private let synthesizer = AVSpeechSynthesizer()
     private var continuation: CheckedContinuation<Void, Never>?
@@ -19,18 +20,32 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
         continuation?.resume()
         continuation = nil
         isPlaying = false
+        isPaused = false
     }
 
-    func play(text: String, voice: AVSpeechSynthesisVoice?) async {
+    func pause() {
+        guard synthesizer.isSpeaking else { return }
+        isPaused = synthesizer.pauseSpeaking(at: .word)
+    }
+
+    func resume() {
+        guard synthesizer.isPaused else { return }
+        synthesizer.continueSpeaking()
+        isPaused = false
+    }
+
+    func play(text: String, voice: AVSpeechSynthesisVoice?, rate: Float, pitch: Float) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         let utterance = AVSpeechUtterance(string: trimmed)
         utterance.voice = voice
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        utterance.rate = min(max(rate, 0.35), 0.6)
+        utterance.pitchMultiplier = min(max(pitch, 0.5), 2.0)
         utterance.prefersAssistiveTechnologySettings = true
 
         isPlaying = true
+        isPaused = false
         synthesizer.speak(utterance)
 
         await withCheckedContinuation { continuation in
@@ -45,6 +60,7 @@ extension SpeechPlaybackManager: AVSpeechSynthesizerDelegate {
         continuation = nil
         if !self.synthesizer.isSpeaking {
             isPlaying = false
+            isPaused = false
         }
     }
 
@@ -52,5 +68,14 @@ extension SpeechPlaybackManager: AVSpeechSynthesizerDelegate {
         continuation?.resume()
         continuation = nil
         isPlaying = false
+        isPaused = false
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {
+        isPaused = true
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
+        isPaused = false
     }
 }
