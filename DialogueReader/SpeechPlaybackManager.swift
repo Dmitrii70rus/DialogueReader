@@ -34,7 +34,7 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
         isPaused = false
     }
 
-    func play(text: String, voice: AVSpeechSynthesisVoice?, rate: Float, pitch: Float) async {
+    func play(text: String, voice: AVSpeechSynthesisVoice?, rate: Float, pitch: Float, volume: Float) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -43,6 +43,7 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
         utterance.rate = min(max(rate, 0.35), 0.6)
         utterance.pitchMultiplier = min(max(pitch, 0.5), 2.0)
         utterance.prefersAssistiveTechnologySettings = true
+        utterance.volume = min(max(volume, 0.0), 1.0)
 
         isPlaying = true
         isPaused = false

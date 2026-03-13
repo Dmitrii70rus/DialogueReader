@@ -3,5 +3,5 @@ import Foundation
 struct DialogueSegment: Identifiable, Hashable {
     let id = UUID()
     var text: String
-    var speakerID: Int
+    var speakerID: UUID
 }

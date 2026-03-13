@@ -1,4 +1,3 @@
-import AVFAudio
 import SwiftUI
 
 struct ContentView: View {
@@ -27,14 +26,39 @@ struct ContentView: View {
                                 .stroke(.quaternary, lineWidth: 1)
                         }
 
-                    speechTuningSection
+                    HStack {
+                        Button("Manage Speakers") {
+                            viewModel.showingSpeakerManager = true
+                        }
+                        .buttonStyle(.bordered)
+
+                        Spacer()
+
+                        if viewModel.playbackManager.isPlaying {
+                            Button(viewModel.playbackManager.isPaused ? "Resume" : "Pause") {
+                                viewModel.togglePauseResume()
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button("Stop") {
+                                viewModel.stopPlayback()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+
                     if viewModel.selectedMode == .standard {
                         standardModeSection
                     } else {
                         dialogueModeSection
                     }
 
-                    speakerSetupSection
+                    if let message = viewModel.userMessage {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
                     monetizationSection
                 }
                 .padding()
@@ -45,35 +69,8 @@ struct ContentView: View {
             PaywallView()
                 .environmentObject(purchaseManager)
         }
-    }
-
-    private var speechTuningSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Speech")
-                .font(.headline)
-
-            VStack(alignment: .leading) {
-                Text("Rate")
-                Slider(value: Binding(
-                    get: { Double(viewModel.speechRate) },
-                    set: { viewModel.speechRate = Float($0) }
-                ), in: 0.35...0.6)
-            }
-
-            VStack(alignment: .leading) {
-                Text("Pitch")
-                Slider(value: Binding(
-                    get: { Double(viewModel.pitch) },
-                    set: { viewModel.pitch = Float($0) }
-                ), in: 0.7...1.4)
-            }
-
-            if viewModel.selectedMode == .dialogue {
-                VStack(alignment: .leading) {
-                    Text("Pause Between Segments: \(viewModel.pauseBetweenSegments.formatted(.number.precision(.fractionLength(1))))s")
-                    Slider(value: $viewModel.pauseBetweenSegments, in: 0...1.0)
-                }
-            }
+        .sheet(isPresented: $viewModel.showingSpeakerManager) {
+            SpeakerManagementView(viewModel: viewModel)
         }
     }
 
@@ -82,10 +79,21 @@ struct ContentView: View {
             Text("Standard TTS")
                 .font(.headline)
 
-            Picker("Narrator", selection: $viewModel.standardSpeakerID) {
+            Picker("Narrator", selection: Binding(
+                get: { viewModel.standardSpeakerID ?? viewModel.speakers.first?.id ?? UUID() },
+                set: { viewModel.standardSpeakerID = $0 }
+            )) {
                 ForEach(viewModel.speakers) { speaker in
                     Text(speaker.name).tag(speaker.id)
                 }
+                .padding()
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            }
+
+            if let message = viewModel.userMessage {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             .pickerStyle(.menu)
 
@@ -95,7 +103,10 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            playbackButtons(playAction: viewModel.playStandardNarration)
+            Button("Play") {
+                viewModel.playStandardNarration()
+            }
+            .buttonStyle(.borderedProminent)
         }
     }
 
@@ -156,65 +167,6 @@ struct ContentView: View {
         }
     }
 
-    private var speakerSetupSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Speakers & Voices")
-                .font(.headline)
-
-            ForEach(viewModel.speakers) { speaker in
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("Speaker Name", text: Binding(
-                        get: { speaker.name },
-                        set: { viewModel.renameSpeaker(speaker.id, name: $0) }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-
-                    Picker("Language", selection: Binding(
-                        get: { speaker.preferredLanguageCode ?? "all" },
-                        set: { viewModel.updateLanguage(for: speaker.id, languageCode: $0 == "all" ? nil : $0) }
-                    )) {
-                        Text("All Languages").tag("all")
-                        ForEach(viewModel.availableLanguageCodes, id: \.self) { language in
-                            Text(viewModel.languageDisplayName(for: language)).tag(language)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    Picker("Voice", selection: Binding(
-                        get: { speaker.selectedVoiceIdentifier ?? "default" },
-                        set: { viewModel.updateVoice(for: speaker.id, voiceIdentifier: $0 == "default" ? nil : $0) }
-                    )) {
-                        Text("System Default").tag("default")
-                        ForEach(viewModel.voices(for: speaker), id: \.identifier) { voice in
-                            Text(voice.displayName).tag(voice.identifier)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    HStack {
-                        Button("Preview Voice") {
-                            viewModel.previewVoice(for: speaker.id)
-                        }
-                        .buttonStyle(.bordered)
-
-                        Text("Enhanced voices may require iOS voice downloads.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .listStyle(.plain)
-                }
-                .padding()
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
-            }
-
-            if let message = viewModel.userMessage {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
     private var monetizationSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             if purchaseManager.isPremiumUnlocked {
@@ -227,41 +179,17 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack {
-                Button("Go Premium") {
-                    viewModel.showingPaywall = true
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-            }
-        }
-    }
-
-    private func playbackButtons(playAction: @escaping () -> Void) -> some View {
-        HStack {
-            Button("Play") {
-                playAction()
-            }
-            .buttonStyle(.borderedProminent)
-
-            Button(viewModel.playbackManager.isPaused ? "Resume" : "Pause") {
-                viewModel.togglePauseResume()
+            Button("Go Premium") {
+                viewModel.showingPaywall = true
             }
             .buttonStyle(.bordered)
-            .disabled(!viewModel.playbackManager.isPlaying)
-
-            Button("Stop") {
-                viewModel.stopPlayback()
-            }
-            .buttonStyle(.bordered)
-            .disabled(!viewModel.playbackManager.isPlaying)
         }
     }
 }
 
 #Preview {
     let purchase = PurchaseManager()
-    ContentView(viewModel: DialogueReaderViewModel(purchaseManager: purchase))
+    let store = SpeakerStore()
+    ContentView(viewModel: DialogueReaderViewModel(purchaseManager: purchase, speakerStore: store))
         .environmentObject(purchase)
 }

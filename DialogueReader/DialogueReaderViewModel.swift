@@ -13,26 +13,51 @@ final class DialogueReaderViewModel: ObservableObject {
 
     @Published var inputText = ""
     @Published var segments: [DialogueSegment] = []
-    @Published var speakers = Speaker.defaultSpeakers
     @Published var selectedMode: ReaderMode = .standard
 
     @Published var userMessage: String?
     @Published var showingPaywall = false
+    @Published var showingSpeakerManager = false
     @Published private(set) var fullDialoguePlayCount = 0
 
-    @Published var speechRate: Float = AVSpeechUtteranceDefaultSpeechRate
-    @Published var pitch: Float = 1.0
-    @Published var pauseBetweenSegments: Double = 0.2
-
-    @Published var standardSpeakerID: Int = 1
+    @Published var standardSpeakerID: UUID?
 
     let playbackManager = SpeechPlaybackManager()
 
     private let purchaseManager: PurchaseManager
+    private let speakerStore: SpeakerStore
     private var playbackTask: Task<Void, Never>?
+    private var cancellables: Set<AnyCancellable> = []
 
-    init(purchaseManager: PurchaseManager) {
+    init(purchaseManager: PurchaseManager, speakerStore: SpeakerStore) {
         self.purchaseManager = purchaseManager
+        self.speakerStore = speakerStore
+        standardSpeakerID = speakerStore.speakers.first?.id
+
+        speakerStore.$speakers
+            .sink { [weak self] speakers in
+                guard let self else { return }
+                guard !speakers.isEmpty else { return }
+
+                if standardSpeakerID == nil || speakers.contains(where: { $0.id == standardSpeakerID }) == false {
+                    standardSpeakerID = speakers.first?.id
+                }
+
+                let availableSpeakerIDs = Set(speakers.map(\.id))
+                segments = segments.map {
+                    var item = $0
+                    if availableSpeakerIDs.contains(item.speakerID) == false,
+                       let fallbackID = speakers.first?.id {
+                        item.speakerID = fallbackID
+                    }
+                    return item
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    var speakers: [Speaker] {
+        speakerStore.speakers
     }
 
     var availableVoices: [AVSpeechSynthesisVoice] {
@@ -64,13 +89,48 @@ final class DialogueReaderViewModel: ObservableObject {
         return "\(locale) (\(languageCode))"
     }
 
-    func voices(for speaker: Speaker) -> [AVSpeechSynthesisVoice] {
-        guard let preferredLanguageCode = speaker.preferredLanguageCode,
-              !preferredLanguageCode.isEmpty else {
-            return availableVoices
+    /// AVSpeechSynthesisVoice does not provide reliable explicit gender metadata.
+    /// We keep this clearly heuristic for browsing assistance only.
+    func inferredGender(for voice: AVSpeechSynthesisVoice) -> SpeakerGender {
+        let value = "\(voice.name.lowercased()) \(voice.identifier.lowercased())"
+        if value.contains("female") || value.contains("woman") {
+            return .likelyFemale
         }
+        if value.contains("male") || value.contains("man") {
+            return .likelyMale
+        }
+        return .unspecified
+    }
 
-        return availableVoices.filter { $0.language == preferredLanguageCode }
+    func voices(for speaker: Speaker) -> [AVSpeechSynthesisVoice] {
+        availableVoices.filter { voice in
+            let languageMatch: Bool = {
+                guard let language = speaker.preferredLanguageCode, !language.isEmpty else { return true }
+                return voice.language == language
+            }()
+
+            let qualityMatch: Bool = {
+                switch speaker.qualityPreference {
+                case .any:
+                    return true
+                case .enhancedOnly:
+                    return voice.quality == .enhanced
+                }
+            }()
+
+            let genderMatch: Bool = {
+                switch speaker.genderGrouping {
+                case .unspecified:
+                    return true
+                case .likelyFemale:
+                    return inferredGender(for: voice) == .likelyFemale
+                case .likelyMale:
+                    return inferredGender(for: voice) == .likelyMale
+                }
+            }()
+
+            return languageMatch && qualityMatch && genderMatch
+        }
     }
 
     func splitTextIntoSegments() {
@@ -78,6 +138,11 @@ final class DialogueReaderViewModel: ObservableObject {
         guard !trimmed.isEmpty else {
             userMessage = "Please enter text before splitting."
             segments = []
+            return
+        }
+
+        guard let fallbackSpeakerID = speakers.first?.id else {
+            userMessage = "Create at least one speaker first."
             return
         }
 
@@ -93,74 +158,64 @@ final class DialogueReaderViewModel: ObservableObject {
         }
 
         segments = lines.enumerated().map { index, text in
-            let defaultSpeaker = speakers[index % speakers.count]
-            return DialogueSegment(text: text, speakerID: defaultSpeaker.id)
+            let speakerID = speakers[safe: index]?.id ?? fallbackSpeakerID
+            return DialogueSegment(text: text, speakerID: speakerID)
         }
 
         userMessage = "Created \(segments.count) segments."
     }
 
-    func updateSpeaker(for segmentID: UUID, speakerID: Int) {
+    func updateSpeaker(for segmentID: UUID, speakerID: UUID) {
         guard let index = segments.firstIndex(where: { $0.id == segmentID }) else { return }
         segments[index].speakerID = speakerID
     }
 
-    func renameSpeaker(_ speakerID: Int, name: String) {
-        guard let index = speakers.firstIndex(where: { $0.id == speakerID }) else { return }
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        speakers[index].name = trimmed.isEmpty ? "Speaker \(speakerID)" : trimmed
+    func saveSpeaker(_ speaker: Speaker) {
+        speakerStore.updateSpeaker(speaker)
     }
 
-    func updateLanguage(for speakerID: Int, languageCode: String?) {
-        guard let index = speakers.firstIndex(where: { $0.id == speakerID }) else { return }
-        speakers[index].preferredLanguageCode = languageCode
-
-        guard let voiceIdentifier = speakers[index].selectedVoiceIdentifier,
-              let selectedVoice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) else {
-            return
-        }
-
-        if let languageCode, selectedVoice.language != languageCode {
-            speakers[index].selectedVoiceIdentifier = nil
-        }
+    func addSpeaker() -> Speaker {
+        speakerStore.addSpeaker()
     }
 
-    func updateVoice(for speakerID: Int, voiceIdentifier: String?) {
-        guard let index = speakers.firstIndex(where: { $0.id == speakerID }) else { return }
-        if let voiceIdentifier,
-           AVSpeechSynthesisVoice(identifier: voiceIdentifier) == nil {
-            userMessage = "That voice is unavailable on this device."
-            return
-        }
-
-        speakers[index].selectedVoiceIdentifier = voiceIdentifier
-
-        if let selected = speakers[index].selectedVoice {
-            speakers[index].preferredLanguageCode = selected.language
-            if selected.quality == .default {
-                userMessage = "Using standard voice quality. You can install enhanced voices in iOS Settings > Accessibility > Spoken Content > Voices."
-            }
-        }
+    func deleteSpeaker(_ speaker: Speaker) {
+        speakerStore.deleteSpeaker(speaker)
     }
 
-    func previewVoice(for speakerID: Int) {
-        guard let speaker = speakers.first(where: { $0.id == speakerID }) else { return }
+    func previewVoice(for speaker: Speaker) {
         let text = "Hello, I am \(speaker.name)."
         stopPlayback()
         playbackTask = Task {
-            await playbackManager.play(text: text, voice: voice(for: speakerID), rate: speechRate, pitch: pitch)
+            await playbackManager.play(
+                text: text,
+                voice: resolvedVoice(for: speaker),
+                rate: speaker.speechRate,
+                pitch: speaker.pitch,
+                volume: speaker.volume
+            )
         }
     }
 
     func playSegment(_ segment: DialogueSegment) {
-        guard voice(for: segment.speakerID) != nil || selectedVoiceIdentifier(for: segment.speakerID) == nil else {
-            userMessage = "The selected voice is unavailable. Choose another voice."
+        guard let speaker = speaker(for: segment.speakerID) else {
+            userMessage = "This segment references a removed speaker."
+            return
+        }
+
+        if speaker.selectedVoiceIdentifier != nil && resolvedVoice(for: speaker) == nil {
+            userMessage = "\(speaker.name)'s selected voice is unavailable."
             return
         }
 
         stopPlayback()
         playbackTask = Task {
-            await playbackManager.play(text: segment.text, voice: voice(for: segment.speakerID), rate: speechRate, pitch: pitch)
+            await playbackManager.play(
+                text: segment.text,
+                voice: resolvedVoice(for: speaker),
+                rate: speaker.speechRate,
+                pitch: speaker.pitch,
+                volume: speaker.volume
+            )
         }
     }
 
@@ -171,14 +226,20 @@ final class DialogueReaderViewModel: ObservableObject {
             return
         }
 
-        guard voice(for: standardSpeakerID) != nil || selectedVoiceIdentifier(for: standardSpeakerID) == nil else {
-            userMessage = "The selected voice is unavailable."
+        guard let speaker = standardSpeaker else {
+            userMessage = "Please create a speaker first."
             return
         }
 
         stopPlayback()
         playbackTask = Task {
-            await playbackManager.play(text: trimmed, voice: voice(for: standardSpeakerID), rate: speechRate, pitch: pitch)
+            await playbackManager.play(
+                text: trimmed,
+                voice: resolvedVoice(for: speaker),
+                rate: speaker.speechRate,
+                pitch: speaker.pitch,
+                volume: speaker.volume
+            )
         }
     }
 
@@ -201,9 +262,18 @@ final class DialogueReaderViewModel: ObservableObject {
         playbackTask = Task {
             for (index, segment) in segments.enumerated() {
                 if Task.isCancelled { return }
-                await playbackManager.play(text: segment.text, voice: voice(for: segment.speakerID), rate: speechRate, pitch: pitch)
+                guard let speaker = speaker(for: segment.speakerID) else { continue }
+
+                await playbackManager.play(
+                    text: segment.text,
+                    voice: resolvedVoice(for: speaker),
+                    rate: speaker.speechRate,
+                    pitch: speaker.pitch,
+                    volume: speaker.volume
+                )
+
                 if index < segments.count - 1 {
-                    let ns = UInt64(max(0, pauseBetweenSegments) * 1_000_000_000)
+                    let ns = UInt64(max(0, speaker.pauseAfterSegment) * 1_000_000_000)
                     try? await Task.sleep(nanoseconds: ns)
                 }
             }
@@ -231,11 +301,32 @@ final class DialogueReaderViewModel: ObservableObject {
         return "Free users can run up to \(PurchaseManager.freePlayLimit) full-dialogue playback sessions after segmentation. Upgrade to premium for unlimited sessions."
     }
 
-    private func selectedVoiceIdentifier(for speakerID: Int) -> String? {
-        speakers.first(where: { $0.id == speakerID })?.selectedVoiceIdentifier
+    private var standardSpeaker: Speaker? {
+        guard let standardSpeakerID else { return speakers.first }
+        return speaker(for: standardSpeakerID) ?? speakers.first
     }
 
-    private func voice(for speakerID: Int) -> AVSpeechSynthesisVoice? {
-        speakers.first(where: { $0.id == speakerID })?.selectedVoice
+    private func speaker(for speakerID: UUID) -> Speaker? {
+        speakers.first(where: { $0.id == speakerID })
+    }
+
+    private func resolvedVoice(for speaker: Speaker) -> AVSpeechSynthesisVoice? {
+        if let selected = speaker.selectedVoice {
+            return selected
+        }
+
+        let candidates = voices(for: speaker)
+        if let enhanced = candidates.first(where: { $0.quality == .enhanced }) {
+            return enhanced
+        }
+
+        return candidates.first
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        guard indices.contains(index) else { return nil }
+        return self[index]
     }
 }
