@@ -83,6 +83,7 @@ extension AVSpeechSynthesisVoice {
         switch quality {
         case .default: return "Standard"
         case .enhanced: return "Enhanced"
+        case .premium: return "Premium"
         @unknown default: return "Standard"
         }
     }

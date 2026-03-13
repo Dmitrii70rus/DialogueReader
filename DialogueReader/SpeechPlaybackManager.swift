@@ -55,6 +55,7 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
     }
 }
 
+@preconcurrency
 extension SpeechPlaybackManager: AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         continuation?.resume()

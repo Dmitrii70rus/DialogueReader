@@ -39,12 +39,12 @@ final class DialogueReaderViewModel: ObservableObject {
                 guard let self else { return }
                 guard !speakers.isEmpty else { return }
 
-                if standardSpeakerID == nil || speakers.contains(where: { $0.id == standardSpeakerID }) == false {
-                    standardSpeakerID = speakers.first?.id
+                if self.standardSpeakerID == nil || speakers.contains(where: { $0.id == self.standardSpeakerID }) == false {
+                    self.standardSpeakerID = speakers.first?.id
                 }
 
                 let availableSpeakerIDs = Set(speakers.map(\.id))
-                segments = segments.map {
+                self.segments = self.segments.map {
                     var item = $0
                     if availableSpeakerIDs.contains(item.speakerID) == false,
                        let fallbackID = speakers.first?.id {

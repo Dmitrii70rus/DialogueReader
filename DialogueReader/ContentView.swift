@@ -89,12 +89,6 @@ struct ContentView: View {
                 .padding()
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
             }
-
-            if let message = viewModel.userMessage {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
             .pickerStyle(.menu)
 
             if viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
