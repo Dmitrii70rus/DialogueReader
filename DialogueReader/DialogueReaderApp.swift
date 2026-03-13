@@ -1,32 +1,18 @@
-//
-//  DialogueReaderApp.swift
-//  DialogueReader
-//
-//  Created by Dmitry Tkachev on 13.03.2026.
-//
-
 import SwiftUI
-import SwiftData
 
 @main
 struct DialogueReaderApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @StateObject private var purchaseManager = PurchaseManager()
+    @StateObject private var speakerStore = SpeakerStore()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(viewModel: DialogueReaderViewModel(purchaseManager: purchaseManager, speakerStore: speakerStore))
+                .environmentObject(purchaseManager)
+                .environmentObject(speakerStore)
+                .task {
+                    await purchaseManager.prepare()
+                }
         }
-        .modelContainer(sharedModelContainer)
     }
 }
