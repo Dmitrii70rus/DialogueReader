@@ -86,6 +86,19 @@ struct ContentView: View {
                 ForEach(viewModel.speakers) { speaker in
                     Text(speaker.name).tag(speaker.id)
                 }
+                .padding()
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            }
+            .pickerStyle(.menu)
+
+            if viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("Paste or type text, then tap Play.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button("Play") {
+                viewModel.playStandardNarration()
             }
             .pickerStyle(.menu)
 
