@@ -86,6 +86,14 @@ struct ContentView: View {
                 ForEach(viewModel.speakers) { speaker in
                     Text(speaker.name).tag(speaker.id)
                 }
+                .padding()
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            }
+
+            if let message = viewModel.userMessage {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             .pickerStyle(.menu)
 
