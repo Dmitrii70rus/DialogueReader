@@ -53,31 +53,54 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
             self.continuation = continuation
         }
     }
-}
 
-@preconcurrency
-extension SpeechPlaybackManager: AVSpeechSynthesizerDelegate {
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+    private func handleDidFinish() {
         continuation?.resume()
         continuation = nil
-        if !self.synthesizer.isSpeaking {
+        if !synthesizer.isSpeaking {
             isPlaying = false
             isPaused = false
         }
     }
 
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+    private func handleDidCancel() {
         continuation?.resume()
         continuation = nil
         isPlaying = false
         isPaused = false
     }
 
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {
+    private func handleDidPause() {
         isPaused = true
     }
 
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
+    private func handleDidContinue() {
         isPaused = false
+    }
+}
+
+extension SpeechPlaybackManager: AVSpeechSynthesizerDelegate {
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        Task { @MainActor [weak self] in
+            self?.handleDidFinish()
+        }
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        Task { @MainActor [weak self] in
+            self?.handleDidCancel()
+        }
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {
+        Task { @MainActor [weak self] in
+            self?.handleDidPause()
+        }
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
+        Task { @MainActor [weak self] in
+            self?.handleDidContinue()
+        }
     }
 }
