@@ -86,6 +86,8 @@ struct ContentView: View {
                 ForEach(viewModel.speakers) { speaker in
                     Text(speaker.name).tag(speaker.id)
                 }
+                .padding()
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
             }
             .pickerStyle(.menu)
 
