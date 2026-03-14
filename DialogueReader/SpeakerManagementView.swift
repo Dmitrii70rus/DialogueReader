@@ -56,6 +56,11 @@ struct SpeakerManagementView: View {
     }
 
     private func summary(for speaker: Speaker) -> String {
+        if speaker.engine == .sherpaOnnx {
+            let sherpaName = SherpaOnnxEngine.shared.bundledVoices.first(where: { $0.id == speaker.sherpaVoiceID })?.displayName ?? "Sherpa Default"
+            return "\(sherpaName) • Sherpa-ONNX"
+        }
+
         let voiceName = speaker.selectedVoice?.name ?? "System default"
         let quality = speaker.selectedVoice?.qualityLabel ?? "Auto"
         return "\(voiceName) • \(quality)"
@@ -72,6 +77,23 @@ struct SpeakerEditorView: View {
             Form {
                 Section("Profile") {
                     TextField("Name", text: $speaker.name)
+
+                    Picker("Engine", selection: $speaker.engine) {
+                        ForEach(SpeechEngineType.allCases) { engine in
+                            Text(engine.title).tag(engine)
+                        }
+                    }
+
+                    if speaker.engine == .sherpaOnnx {
+                        Picker("Sherpa Voice", selection: Binding(
+                            get: { speaker.sherpaVoiceID ?? SherpaOnnxEngine.shared.bundledVoices.first?.id ?? "en-us-default" },
+                            set: { speaker.sherpaVoiceID = $0 }
+                        )) {
+                            ForEach(SherpaOnnxEngine.shared.bundledVoices) { voice in
+                                Text(voice.displayName).tag(voice.id)
+                            }
+                        }
+                    }
 
                     Picker("Language", selection: Binding(
                         get: { speaker.preferredLanguageCode ?? "all" },
@@ -103,6 +125,7 @@ struct SpeakerEditorView: View {
                 }
 
                 Section("Voice") {
+                    if speaker.engine == .appleSystem {
                     Picker("Voice", selection: Binding(
                         get: { speaker.selectedVoiceIdentifier ?? "default" },
                         set: { speaker.selectedVoiceIdentifier = $0 == "default" ? nil : $0 }
@@ -116,6 +139,8 @@ struct SpeakerEditorView: View {
                                 }
                             }
                         }
+                    }
+
                     }
 
                     Button("Preview Voice") {
@@ -164,9 +189,13 @@ struct SpeakerEditorView: View {
                         var sanitized = speaker
                         let trimmed = sanitized.name.trimmingCharacters(in: .whitespacesAndNewlines)
                         sanitized.name = trimmed.isEmpty ? "Speaker" : trimmed
-                        if let identifier = sanitized.selectedVoiceIdentifier,
+                        if sanitized.engine == .appleSystem,
+                           let identifier = sanitized.selectedVoiceIdentifier,
                            AVSpeechSynthesisVoice(identifier: identifier) == nil {
                             sanitized.selectedVoiceIdentifier = nil
+                        }
+                        if sanitized.engine == .sherpaOnnx, sanitized.sherpaVoiceID == nil {
+                            sanitized.sherpaVoiceID = SherpaOnnxEngine.shared.bundledVoices.first?.id
                         }
                         viewModel.saveSpeaker(sanitized)
                         dismiss()

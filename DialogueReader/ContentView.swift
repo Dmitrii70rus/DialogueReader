@@ -130,6 +130,29 @@ struct ContentView: View {
             Text("Dialogue")
                 .font(.headline)
 
+            Toggle("Auto-assign alternating speakers", isOn: $viewModel.autoAssignAlternatingSpeakers)
+                .font(.subheadline)
+
+            if viewModel.autoAssignAlternatingSpeakers {
+                Picker("Starting Speaker", selection: Binding(
+                    get: { viewModel.autoAssignStartSpeakerID ?? viewModel.speakers.first?.id ?? UUID() },
+                    set: { viewModel.autoAssignStartSpeakerID = $0 }
+                )) {
+                    ForEach(viewModel.speakers) { speaker in
+                        Text(speaker.name).tag(speaker.id)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            SelectionAssignView(
+                text: $viewModel.inputText,
+                speakers: viewModel.speakers,
+                onAssign: { selectedText, speakerID in
+                    viewModel.assignSelectedTextAsSegment(selectedText, to: speakerID)
+                }
+            )
+
             HStack {
                 Button("Split Into Segments") {
                     viewModel.splitTextIntoSegments()

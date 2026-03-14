@@ -18,6 +18,8 @@ final class SpeakerStore: ObservableObject {
         let speaker = Speaker(
             id: UUID(),
             name: "Speaker \(speakers.count + 1)",
+            engine: .appleSystem,
+            sherpaVoiceID: nil,
             selectedVoiceIdentifier: bestDefaultVoiceIdentifier(),
             preferredLanguageCode: "en-US",
             genderGrouping: .unspecified,
@@ -61,7 +63,7 @@ final class SpeakerStore: ObservableObject {
                AVSpeechSynthesisVoice(identifier: id) == nil {
                 item.selectedVoiceIdentifier = nil
             }
-            if item.selectedVoiceIdentifier == nil {
+            if item.engine == .appleSystem, item.selectedVoiceIdentifier == nil {
                 item.selectedVoiceIdentifier = bestDefaultVoiceIdentifier(for: item.preferredLanguageCode)
             }
             return item

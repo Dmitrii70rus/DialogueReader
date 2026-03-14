@@ -29,6 +29,8 @@ final class DialogueReaderViewModel: ObservableObject {
     @Published private(set) var fullDialoguePlayCount = 0
 
     @Published var standardSpeakerID: UUID?
+    @Published var autoAssignAlternatingSpeakers = true
+    @Published var autoAssignStartSpeakerID: UUID?
 
     let playbackManager = SpeechPlaybackManager()
 
@@ -41,6 +43,7 @@ final class DialogueReaderViewModel: ObservableObject {
         self.purchaseManager = purchaseManager
         self.speakerStore = speakerStore
         standardSpeakerID = speakerStore.speakers.first?.id
+        autoAssignStartSpeakerID = speakerStore.speakers.first?.id
 
         speakerStore.$speakers
             .sink { [weak self] speakers in
@@ -203,12 +206,33 @@ final class DialogueReaderViewModel: ObservableObject {
             return
         }
 
+        let startID = autoAssignStartSpeakerID ?? fallbackSpeakerID
+        let startIndex = speakers.firstIndex(where: { $0.id == startID }) ?? 0
+
         segments = lines.enumerated().map { index, text in
-            let speakerID = speakers[safe: index]?.id ?? fallbackSpeakerID
+            let speakerID: UUID
+            if autoAssignAlternatingSpeakers, !speakers.isEmpty {
+                let idx = (startIndex + index) % speakers.count
+                speakerID = speakers[idx].id
+            } else {
+                speakerID = fallbackSpeakerID
+            }
             return DialogueSegment(text: text, speakerID: speakerID)
         }
 
         userMessage = "Created \(segments.count) segments."
+    }
+
+
+    func assignSelectedTextAsSegment(_ selectedText: String, to speakerID: UUID) {
+        let trimmed = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            userMessage = "Select non-empty text to assign a speaker."
+            return
+        }
+
+        segments.append(DialogueSegment(text: trimmed, speakerID: speakerID))
+        userMessage = "Added selected text as a new segment."
     }
 
     func updateSpeaker(for segmentID: UUID, speakerID: UUID) {
@@ -232,13 +256,7 @@ final class DialogueReaderViewModel: ObservableObject {
         let text = "Hello, this is a preview of the selected voice."
         stopPlayback()
         playbackTask = Task {
-            await playbackManager.play(
-                text: text,
-                voice: resolvedVoice(for: speaker),
-                rate: speaker.speechRate,
-                pitch: speaker.pitch,
-                volume: speaker.volume
-            )
+            await playTextWithSpeaker(text: text, speaker: speaker)
         }
     }
 
@@ -255,13 +273,7 @@ final class DialogueReaderViewModel: ObservableObject {
 
         stopPlayback()
         playbackTask = Task {
-            await playbackManager.play(
-                text: segment.text,
-                voice: resolvedVoice(for: speaker),
-                rate: speaker.speechRate,
-                pitch: speaker.pitch,
-                volume: speaker.volume
-            )
+            await playTextWithSpeaker(text: segment.text, speaker: speaker)
         }
     }
 
@@ -279,13 +291,7 @@ final class DialogueReaderViewModel: ObservableObject {
 
         stopPlayback()
         playbackTask = Task {
-            await playbackManager.play(
-                text: trimmed,
-                voice: resolvedVoice(for: speaker),
-                rate: speaker.speechRate,
-                pitch: speaker.pitch,
-                volume: speaker.volume
-            )
+            await playTextWithSpeaker(text: trimmed, speaker: speaker)
         }
     }
 
@@ -310,13 +316,7 @@ final class DialogueReaderViewModel: ObservableObject {
                 if Task.isCancelled { return }
                 guard let speaker = speaker(for: segment.speakerID) else { continue }
 
-                await playbackManager.play(
-                    text: segment.text,
-                    voice: resolvedVoice(for: speaker),
-                    rate: speaker.speechRate,
-                    pitch: speaker.pitch,
-                    volume: speaker.volume
-                )
+                await playTextWithSpeaker(text: segment.text, speaker: speaker)
 
                 if index < segments.count - 1 {
                     let ns = UInt64(max(0, speaker.pauseAfterSegment) * 1_000_000_000)
@@ -338,6 +338,30 @@ final class DialogueReaderViewModel: ObservableObject {
         } else {
             playbackManager.pause()
         }
+    }
+
+
+    private func playTextWithSpeaker(text: String, speaker: Speaker) async {
+        if speaker.engine == .sherpaOnnx {
+            let sherpa = SherpaOnnxEngine.shared
+            if sherpa.isAvailable {
+                let voiceID = speaker.sherpaVoiceID ?? sherpa.bundledVoices.first?.id ?? "en-us-default"
+                if let url = try? await sherpa.synthesizeToWav(text: text, voiceID: voiceID) {
+                    await playbackManager.playAudioFile(url: url)
+                    return
+                }
+            }
+
+            userMessage = "Sherpa-ONNX is unavailable in this build; using Apple voice fallback."
+        }
+
+        await playbackManager.play(
+            text: text,
+            voice: resolvedVoice(for: speaker),
+            rate: speaker.speechRate,
+            pitch: speaker.pitch,
+            volume: speaker.volume
+        )
     }
 
     func paywallDescription() -> String {

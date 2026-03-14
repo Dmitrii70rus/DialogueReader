@@ -14,6 +14,7 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
 
     private let synthesizer = AVSpeechSynthesizer()
     private var continuation: CheckedContinuation<Void, Never>?
+    private var audioPlayer: AVAudioPlayer?
 
     var isPlaying: Bool {
         playbackState != .idle
@@ -29,13 +30,23 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
     }
 
     func stop() {
-        synthesizer.stopSpeaking(at: .immediate)
+        if synthesizer.isSpeaking || synthesizer.isPaused {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+        audioPlayer?.stop()
+        audioPlayer = nil
         continuation?.resume()
         continuation = nil
         playbackState = .idle
     }
 
     func pause() {
+        if let audioPlayer, audioPlayer.isPlaying {
+            audioPlayer.pause()
+            playbackState = .paused
+            return
+        }
+
         guard synthesizer.isSpeaking else { return }
         if synthesizer.pauseSpeaking(at: .word) {
             playbackState = .paused
@@ -43,6 +54,12 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
     }
 
     func resume() {
+        if let audioPlayer, !audioPlayer.isPlaying {
+            audioPlayer.play()
+            playbackState = .playing
+            return
+        }
+
         guard synthesizer.isPaused else { return }
         synthesizer.continueSpeaking()
         playbackState = .playing
@@ -65,6 +82,25 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
 
         await withCheckedContinuation { continuation in
             self.continuation = continuation
+        }
+    }
+
+    func playAudioFile(url: URL) async {
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            audioPlayer = player
+            player.delegate = self
+            playbackState = .playing
+            player.prepareToPlay()
+            player.play()
+
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+            }
+        } catch {
+            continuation?.resume()
+            continuation = nil
+            playbackState = .idle
         }
     }
 
@@ -105,6 +141,17 @@ extension SpeechPlaybackManager: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
             self?.playbackState = .playing
+        }
+    }
+}
+
+extension SpeechPlaybackManager: AVAudioPlayerDelegate {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor [weak self] in
+            self?.audioPlayer = nil
+            self?.continuation?.resume()
+            self?.continuation = nil
+            self?.playbackState = .idle
         }
     }
 }

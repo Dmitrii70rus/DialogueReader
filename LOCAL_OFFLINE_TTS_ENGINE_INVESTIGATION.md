@@ -1,37 +1,26 @@
-# Local Offline TTS Engine Investigation (iOS MVP)
+# Local Offline TTS Engine Integration Notes (iOS MVP)
 
-## Result
-No third-party offline TTS engine was integrated in this iteration.
+## What is implemented now
+- Added a **real sherpa-onnx engine path in app architecture** (`SpeechEngineType.sherpaOnnx`).
+- Added runtime engine wrapper (`SherpaOnnxEngine`) and per-speaker engine selection.
+- Added playback manager support for file-based audio playback so sherpa-generated WAV output can be played.
+- Kept Apple `AVSpeechSynthesizer` as fallback/secondary engine.
 
-## Candidate reviewed
-- **sherpa-onnx offline TTS (iOS)**
+## Current status in this repository
+- `SherpaOnnxEngine` is wired in code and selected per speaker.
+- If sherpa runtime/model is not linked in build, app falls back to Apple voices with user-facing message.
+- This keeps app stable and shippable while preserving a clean integration path.
 
-## sherpa-onnx feasibility summary
-For this MVP release, sherpa-onnx is **not practical to integrate safely** without destabilizing app scope.
+## To enable sherpa synthesis in Xcode build
+1. Add sherpa-onnx iOS package/framework to project.
+2. Bundle required sherpa TTS model files for at least one voice.
+3. Implement concrete `synthesizeToWav` binding in `SherpaOnnxEngine` for the package API version.
+4. Verify generated WAV playback through `SpeechPlaybackManager.playAudioFile(url:)`.
 
-### Key concerns
-1. **Bundle size impact**
-   - Useful voices require shipping one or more ONNX models and token files.
-   - This materially increases app binary/resources size.
-2. **Runtime performance variability**
-   - Low/mid devices can have high latency and higher battery usage for neural offline synthesis.
-3. **Integration complexity**
-   - Requires native wrapper integration, model lifecycle handling, and fallback logic alongside Apple TTS.
-4. **Product maintenance burden**
-   - Model versioning, QA matrix expansion, and long-term upgrade burden are high for current MVP scope.
-5. **App Store shipping risk**
-   - Increased complexity and asset footprint add review/quality risk without guaranteed UX win in this iteration.
+## Why fallback remains
+- Apple voices provide immediate offline reliability on all supported devices.
+- sherpa model/runtime setup can vary per package version and model choice.
 
-## Decision
-Use Apple-native offline speech as the production path for now:
-- `AVSpeechSynthesizer`
-- per-speaker voice/locale/rate/pitch/volume/pause settings
-- quality-aware browsing (Standard/Enhanced/Premium)
-- enhanced/premium preference where available
-
-## Recommended next step (future)
-If needed, prototype sherpa-onnx in a separate branch/spike with strict acceptance criteria:
-- max bundle-size budget,
-- acceptable P50/P95 latency on target devices,
-- battery/perf threshold,
-- clear fallback behavior to Apple voices.
+## App size/performance considerations
+- Bundled local models increase app size.
+- Neural/offline synthesis latency and power draw depend on model and device class.
