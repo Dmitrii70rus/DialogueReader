@@ -76,6 +76,11 @@ struct PaywallView: View {
                 }
             }
         }
+        .task {
+            if purchaseManager.isPremiumUnlocked {
+                dismiss()
+            }
+        }
     }
 
     private var unlockButtonTitle: String {

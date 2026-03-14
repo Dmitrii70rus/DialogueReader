@@ -57,6 +57,11 @@ struct ContentView: View {
             PaywallView()
                 .environmentObject(purchaseManager)
         }
+        .onChange(of: purchaseManager.isPremiumUnlocked) { _, isUnlocked in
+            if isUnlocked {
+                viewModel.showingPaywall = false
+            }
+        }
         .sheet(isPresented: $viewModel.showingSpeakerManager) {
             SpeakerManagementView(viewModel: viewModel)
         }
@@ -201,10 +206,13 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Button("Go Premium") {
-                viewModel.showingPaywall = true
+            Button(purchaseManager.isPremiumUnlocked ? "Premium Active" : "Go Premium") {
+                if !purchaseManager.isPremiumUnlocked {
+                    viewModel.showingPaywall = true
+                }
             }
             .buttonStyle(.bordered)
+            .disabled(purchaseManager.isPremiumUnlocked)
         }
     }
 }
