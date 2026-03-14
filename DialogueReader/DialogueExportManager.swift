@@ -71,7 +71,7 @@ private actor SpeechAudioFileWriter {
         utterance.pitchMultiplier = min(max(pitch, 0.5), 2.0)
         utterance.volume = min(max(volume, 0.0), 1.0)
 
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             var hasResumed = false
 
             synthesizer.write(utterance) { buffer in

@@ -78,15 +78,23 @@ struct SelectionTextView: UIViewRepresentable {
         }
 
         func textViewDidChange(_ textView: UITextView) {
-            parent.text = textView.text
+            let updatedText = textView.text ?? ""
+            DispatchQueue.main.async { [weak self] in
+                self?.parent.text = updatedText
+            }
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
-            guard let range = textView.selectedTextRange else {
-                parent.selectedText = ""
-                return
+            let selected: String
+            if let range = textView.selectedTextRange {
+                selected = textView.text(in: range) ?? ""
+            } else {
+                selected = ""
             }
-            parent.selectedText = textView.text(in: range) ?? ""
+
+            DispatchQueue.main.async { [weak self] in
+                self?.parent.selectedText = selected
+            }
         }
     }
 }
