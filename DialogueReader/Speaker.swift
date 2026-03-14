@@ -59,6 +59,34 @@ struct Speaker: Identifiable, Hashable, Codable {
     var volume: Float
     var qualityPreference: VoiceQualityPreference
 
+    init(
+        id: UUID,
+        name: String,
+        engine: SpeechEngineType,
+        sherpaVoiceID: String?,
+        selectedVoiceIdentifier: String?,
+        preferredLanguageCode: String?,
+        genderGrouping: SpeakerGender,
+        speechRate: Float,
+        pitch: Float,
+        pauseAfterSegment: Double,
+        volume: Float,
+        qualityPreference: VoiceQualityPreference
+    ) {
+        self.id = id
+        self.name = name
+        self.engine = engine
+        self.sherpaVoiceID = sherpaVoiceID
+        self.selectedVoiceIdentifier = selectedVoiceIdentifier
+        self.preferredLanguageCode = preferredLanguageCode
+        self.genderGrouping = genderGrouping
+        self.speechRate = speechRate
+        self.pitch = pitch
+        self.pauseAfterSegment = pauseAfterSegment
+        self.volume = volume
+        self.qualityPreference = qualityPreference
+    }
+
 
     enum CodingKeys: String, CodingKey {
         case id, name, engine, sherpaVoiceID, selectedVoiceIdentifier, preferredLanguageCode, genderGrouping, speechRate, pitch, pauseAfterSegment, volume, qualityPreference
