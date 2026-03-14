@@ -43,6 +43,7 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
         utterance.rate = min(max(rate, 0.35), 0.6)
         utterance.pitchMultiplier = min(max(pitch, 0.5), 2.0)
         utterance.prefersAssistiveTechnologySettings = true
+        utterance.preUtteranceDelay = 0.02
         utterance.volume = min(max(volume, 0.0), 1.0)
 
         isPlaying = true

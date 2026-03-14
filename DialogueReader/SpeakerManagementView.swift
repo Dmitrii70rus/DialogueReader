@@ -108,8 +108,13 @@ struct SpeakerEditorView: View {
                         set: { speaker.selectedVoiceIdentifier = $0 == "default" ? nil : $0 }
                     )) {
                         Text("System Best Match").tag("default")
-                        ForEach(viewModel.voices(for: speaker), id: \.identifier) { voice in
-                            Text(voice.displayName).tag(voice.identifier)
+                        ForEach(viewModel.groupedVoices(for: speaker)) { group in
+                            Section(group.title) {
+                                ForEach(group.voices, id: \.identifier) { voice in
+                                    Text("\(voice.name) — \(viewModel.voiceSubtitle(for: voice))")
+                                        .tag(voice.identifier)
+                                }
+                            }
                         }
                     }
 

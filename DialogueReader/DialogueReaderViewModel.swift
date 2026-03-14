@@ -4,6 +4,14 @@ import Foundation
 
 @MainActor
 final class DialogueReaderViewModel: ObservableObject {
+    struct VoiceLanguageGroup: Identifiable {
+        let languageCode: String
+        let title: String
+        let voices: [AVSpeechSynthesisVoice]
+
+        var id: String { languageCode }
+    }
+
     enum ReaderMode: String, CaseIterable, Identifiable {
         case standard = "Standard TTS"
         case dialogue = "Dialogue"
@@ -84,7 +92,6 @@ final class DialogueReaderViewModel: ObservableObject {
         return "Higher-quality Apple voices may need downloading in Settings > Accessibility > Spoken Content > Voices."
     }
 
-
     var canPlayFullDialogue: Bool {
         purchaseManager.isPremiumUnlocked || fullDialoguePlayCount < PurchaseManager.freePlayLimit
     }
@@ -127,7 +134,7 @@ final class DialogueReaderViewModel: ObservableObject {
                 case .any:
                     return true
                 case .enhancedOnly:
-                    return voice.quality == .enhanced
+                    return voice.quality == .enhanced || voice.quality == .premium
                 }
             }()
 
@@ -143,6 +150,32 @@ final class DialogueReaderViewModel: ObservableObject {
             }()
 
             return languageMatch && qualityMatch && genderMatch
+        }
+    }
+
+    func groupedVoices(for speaker: Speaker) -> [VoiceLanguageGroup] {
+        let grouped = Dictionary(grouping: voices(for: speaker), by: \.language)
+        return grouped.keys.sorted().map { code in
+            VoiceLanguageGroup(
+                languageCode: code,
+                title: languageDisplayName(for: code),
+                voices: grouped[code, default: []].sorted { lhs, rhs in
+                    if lhs.quality != rhs.quality { return lhs.quality.rawValue > rhs.quality.rawValue }
+                    return lhs.name < rhs.name
+                }
+            )
+        }
+    }
+
+    func voiceSubtitle(for voice: AVSpeechSynthesisVoice) -> String {
+        let gender = inferredGender(for: voice)
+        switch gender {
+        case .unspecified:
+            return voice.qualityLabel
+        case .likelyFemale:
+            return "Likely Female • \(voice.qualityLabel)"
+        case .likelyMale:
+            return "Likely Male • \(voice.qualityLabel)"
         }
     }
 
@@ -196,7 +229,7 @@ final class DialogueReaderViewModel: ObservableObject {
     }
 
     func previewVoice(for speaker: Speaker) {
-        let text = "Hello, I am \(speaker.name)."
+        let text = "Hello, this is a preview of the selected voice."
         stopPlayback()
         playbackTask = Task {
             await playbackManager.play(
@@ -323,16 +356,36 @@ final class DialogueReaderViewModel: ObservableObject {
         speakers.first(where: { $0.id == speakerID })
     }
 
+    func bestVoiceIdentifierForDefaultSpeaker() -> String? {
+        if let premiumEnglish = availableVoices.first(where: { ($0.language.hasPrefix("en")) && $0.quality == .premium }) {
+            return premiumEnglish.identifier
+        }
+        if let enhancedEnglish = availableVoices.first(where: { ($0.language.hasPrefix("en")) && $0.quality == .enhanced }) {
+            return enhancedEnglish.identifier
+        }
+        if let standardEnglish = availableVoices.first(where: { ($0.language.hasPrefix("en")) && $0.quality == .default }) {
+            return standardEnglish.identifier
+        }
+        return availableVoices.first?.identifier
+    }
+
     private func resolvedVoice(for speaker: Speaker) -> AVSpeechSynthesisVoice? {
         if let selected = speaker.selectedVoice {
             return selected
         }
 
         let candidates = voices(for: speaker)
+
+        if let premium = candidates.first(where: { $0.quality == .premium }) {
+            return premium
+        }
         if let enhanced = candidates.first(where: { $0.quality == .enhanced }) {
             return enhanced
         }
 
+        if let bestIdentifier = bestVoiceIdentifierForDefaultSpeaker() {
+            return AVSpeechSynthesisVoice(identifier: bestIdentifier)
+        }
         return candidates.first
     }
 }
