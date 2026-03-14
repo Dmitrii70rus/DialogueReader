@@ -47,6 +47,13 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    if let url = viewModel.exportedAudioURL {
+                        ShareLink(item: url) {
+                            Label("Share Exported Audio", systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
                     monetizationSection
                 }
                 .padding()
@@ -89,6 +96,11 @@ struct ContentView: View {
             }
 
             narrationTransportControls
+
+            Button("Export Narration Audio") {
+                Task { await viewModel.exportNarration() }
+            }
+            .buttonStyle(.bordered)
         }
     }
 
@@ -154,7 +166,7 @@ struct ContentView: View {
             )
 
             HStack {
-                Button("Split Into Segments") {
+                Button("Split by Lines") {
                     viewModel.splitTextIntoSegments()
                 }
                 .buttonStyle(.bordered)
@@ -179,11 +191,16 @@ struct ContentView: View {
                 }
             }
 
+            Button("Export Dialogue Audio") {
+                Task { await viewModel.exportDialogue() }
+            }
+            .buttonStyle(.bordered)
+
             if viewModel.segments.isEmpty {
                 ContentUnavailableView(
                     "No Segments Yet",
                     systemImage: "text.quote",
-                    description: Text(viewModel.hasText ? "Tap Split Into Segments to convert each non-empty line into dialogue." : "Paste or type text to create dialogue segments.")
+                    description: Text(viewModel.hasText ? "Tap Split by Lines or select text and assign speaker." : "Paste or type text to create dialogue segments.")
                 )
             } else {
                 ForEach(viewModel.segments) { segment in
@@ -220,7 +237,10 @@ struct ContentView: View {
     private var monetizationSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             if purchaseManager.isPremiumUnlocked {
-                Text("Premium unlocked: unlimited full-dialogue playback")
+                Label("Premium Active", systemImage: "checkmark.seal.fill")
+                    .font(.headline)
+                    .foregroundStyle(.green)
+                Text("Unlimited full-dialogue playback unlocked.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
@@ -234,7 +254,8 @@ struct ContentView: View {
                     viewModel.showingPaywall = true
                 }
             }
-            .buttonStyle(.bordered)
+                        .buttonStyle(.borderedProminent)
+            .tint(purchaseManager.isPremiumUnlocked ? .green : .accentColor)
             .disabled(purchaseManager.isPremiumUnlocked)
         }
     }

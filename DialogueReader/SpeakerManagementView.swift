@@ -56,11 +56,6 @@ struct SpeakerManagementView: View {
     }
 
     private func summary(for speaker: Speaker) -> String {
-        if speaker.engine == .sherpaOnnx {
-            let sherpaName = SherpaOnnxEngine.shared.bundledVoices.first(where: { $0.id == speaker.sherpaVoiceID })?.displayName ?? "Sherpa Default"
-            return "\(sherpaName) • Sherpa-ONNX"
-        }
-
         let voiceName = speaker.selectedVoice?.name ?? "System default"
         let quality = speaker.selectedVoice?.qualityLabel ?? "Auto"
         return "\(voiceName) • \(quality)"
@@ -79,21 +74,13 @@ struct SpeakerEditorView: View {
                     TextField("Name", text: $speaker.name)
 
                     Picker("Engine", selection: $speaker.engine) {
-                        ForEach(SpeechEngineType.allCases) { engine in
+                        ForEach(viewModel.availableSpeechEngines) { engine in
                             Text(engine.title).tag(engine)
                         }
                     }
-
-                    if speaker.engine == .sherpaOnnx {
-                        Picker("Sherpa Voice", selection: Binding(
-                            get: { speaker.sherpaVoiceID ?? SherpaOnnxEngine.shared.bundledVoices.first?.id ?? "en-us-default" },
-                            set: { speaker.sherpaVoiceID = $0 }
-                        )) {
-                            ForEach(SherpaOnnxEngine.shared.bundledVoices) { voice in
-                                Text(voice.displayName).tag(voice.id)
-                            }
-                        }
-                    }
+                    Text(viewModel.sherpaStatusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     Picker("Language", selection: Binding(
                         get: { speaker.preferredLanguageCode ?? "all" },
@@ -105,11 +92,6 @@ struct SpeakerEditorView: View {
                         }
                     }
 
-                    Picker("Gender Filter", selection: $speaker.genderGrouping) {
-                        ForEach(SpeakerGender.allCases) { item in
-                            Text(item.title).tag(item)
-                        }
-                    }
 
                     Picker("Quality", selection: $speaker.qualityPreference) {
                         ForEach(VoiceQualityPreference.allCases) { preference in
@@ -193,9 +175,6 @@ struct SpeakerEditorView: View {
                            let identifier = sanitized.selectedVoiceIdentifier,
                            AVSpeechSynthesisVoice(identifier: identifier) == nil {
                             sanitized.selectedVoiceIdentifier = nil
-                        }
-                        if sanitized.engine == .sherpaOnnx, sanitized.sherpaVoiceID == nil {
-                            sanitized.sherpaVoiceID = SherpaOnnxEngine.shared.bundledVoices.first?.id
                         }
                         viewModel.saveSpeaker(sanitized)
                         dismiss()

@@ -1,29 +1,16 @@
-# Sherpa-ONNX Integration
+# Sherpa-ONNX Integration Status
 
-## Implemented app architecture
-- `SpeechEngineType` adds explicit engine selection per speaker:
-  - `sherpaOnnx`
-  - `appleSystem`
-- `SherpaOnnxEngine` is integrated in code as a dedicated runtime path.
-- `DialogueReaderViewModel` routes playback by speaker engine.
-- `SpeechPlaybackManager` supports both:
-  - Apple utterance playback
-  - File playback for sherpa-generated WAV
+## Current build status
+- A `SherpaOnnxEngine` scaffold file exists in the codebase.
+- **Sherpa runtime and model assets are not linked in this repository build yet.**
+- To avoid misleading UX, Sherpa is now hidden from speaker engine selection UI.
+- App playback/export currently use Apple offline `AVSpeechSynthesizer` only.
 
-## Bundled model in this repo
-- Logical default voice id: `en-us-default`
-- Runtime voice list exposed via `SherpaOnnxEngine.bundledVoices`
+## Why Sherpa is hidden
+A selectable Sherpa option without linked runtime/models caused false expectations and fallback behavior. The app now shows an explicit status note in the speaker editor instead of a fake selectable path.
 
-## Current build behavior
-- If Sherpa runtime/model is linked in build, sherpa path is used for speakers configured with `sherpaOnnx`.
-- If not linked, app falls back to Apple TTS and shows a clear message.
-
-## Enabling full sherpa runtime in Xcode
-1. Add sherpa-onnx iOS framework/package.
-2. Bundle TTS model files for selected sherpa voice(s).
-3. Implement concrete sherpa API call in `SherpaOnnxEngine.synthesizeToWav`.
-4. Validate generated WAV playback in app.
-
-## App size/performance notes
-- Local neural models can significantly increase app size.
-- Latency depends on model and device.
+## What is needed for real Sherpa enablement
+1. Link a real sherpa-onnx iOS runtime package/framework in Xcode.
+2. Bundle at least one compatible local TTS model/voice.
+3. Implement concrete synthesis in `SherpaOnnxEngine.synthesizeToWav`.
+4. Re-enable Sherpa in `availableSpeechEngines` only when runtime+model checks pass.

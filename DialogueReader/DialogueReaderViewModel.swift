@@ -26,6 +26,7 @@ final class DialogueReaderViewModel: ObservableObject {
     @Published var userMessage: String?
     @Published var showingPaywall = false
     @Published var showingSpeakerManager = false
+    @Published var exportedAudioURL: URL?
     @Published private(set) var fullDialoguePlayCount = 0
 
     @Published var standardSpeakerID: UUID?
@@ -36,12 +37,18 @@ final class DialogueReaderViewModel: ObservableObject {
 
     private let purchaseManager: PurchaseManager
     private let speakerStore: SpeakerStore
+    private let exportManager: DialogueExportManaging
     private var playbackTask: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
 
-    init(purchaseManager: PurchaseManager, speakerStore: SpeakerStore) {
+    init(
+        purchaseManager: PurchaseManager,
+        speakerStore: SpeakerStore,
+        exportManager: DialogueExportManaging = AppleDialogueExportManager()
+    ) {
         self.purchaseManager = purchaseManager
         self.speakerStore = speakerStore
+        self.exportManager = exportManager
         standardSpeakerID = speakerStore.speakers.first?.id
         autoAssignStartSpeakerID = speakerStore.speakers.first?.id
 
@@ -69,6 +76,15 @@ final class DialogueReaderViewModel: ObservableObject {
 
     var speakers: [Speaker] {
         speakerStore.speakers
+    }
+
+
+    var availableSpeechEngines: [SpeechEngineType] {
+        [.appleSystem]
+    }
+
+    var sherpaStatusMessage: String {
+        "Sherpa-ONNX is hidden in this build: runtime and bundled model assets are not linked yet."
     }
 
     var availableVoices: [AVSpeechSynthesisVoice] {
@@ -141,18 +157,7 @@ final class DialogueReaderViewModel: ObservableObject {
                 }
             }()
 
-            let genderMatch: Bool = {
-                switch speaker.genderGrouping {
-                case .unspecified:
-                    return true
-                case .likelyFemale:
-                    return inferredGender(for: voice) == .likelyFemale
-                case .likelyMale:
-                    return inferredGender(for: voice) == .likelyMale
-                }
-            }()
-
-            return languageMatch && qualityMatch && genderMatch
+            return languageMatch && qualityMatch
         }
     }
 
@@ -171,15 +176,7 @@ final class DialogueReaderViewModel: ObservableObject {
     }
 
     func voiceSubtitle(for voice: AVSpeechSynthesisVoice) -> String {
-        let gender = inferredGender(for: voice)
-        switch gender {
-        case .unspecified:
-            return voice.qualityLabel
-        case .likelyFemale:
-            return "Likely Female • \(voice.qualityLabel)"
-        case .likelyMale:
-            return "Likely Male • \(voice.qualityLabel)"
-        }
+        voice.qualityLabel
     }
 
     func splitTextIntoSegments() {
@@ -342,19 +339,6 @@ final class DialogueReaderViewModel: ObservableObject {
 
 
     private func playTextWithSpeaker(text: String, speaker: Speaker) async {
-        if speaker.engine == .sherpaOnnx {
-            let sherpa = SherpaOnnxEngine.shared
-            if sherpa.isAvailable {
-                let voiceID = speaker.sherpaVoiceID ?? sherpa.bundledVoices.first?.id ?? "en-us-default"
-                if let url = try? await sherpa.synthesizeToWav(text: text, voiceID: voiceID) {
-                    await playbackManager.playAudioFile(url: url)
-                    return
-                }
-            }
-
-            userMessage = "Sherpa-ONNX is unavailable in this build; using Apple voice fallback."
-        }
-
         await playbackManager.play(
             text: text,
             voice: resolvedVoice(for: speaker),
@@ -362,6 +346,29 @@ final class DialogueReaderViewModel: ObservableObject {
             pitch: speaker.pitch,
             volume: speaker.volume
         )
+    }
+
+    func exportNarration() async {
+        guard let speaker = standardSpeaker else {
+            userMessage = "Please create a speaker first."
+            return
+        }
+
+        do {
+            exportedAudioURL = try await exportManager.exportNarrationAudio(text: inputText, speaker: speaker)
+            userMessage = "Narration export ready."
+        } catch {
+            userMessage = error.localizedDescription
+        }
+    }
+
+    func exportDialogue() async {
+        do {
+            exportedAudioURL = try await exportManager.exportDialogueAudio(segments: segments, speakers: speakers)
+            userMessage = "Dialogue export ready."
+        } catch {
+            userMessage = error.localizedDescription
+        }
     }
 
     func paywallDescription() -> String {

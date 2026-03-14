@@ -7,7 +7,7 @@ final class SpeakerStore: ObservableObject {
     @Published private(set) var speakers: [Speaker] = []
 
     private let defaults: UserDefaults
-    private let storageKey = "dialoguereader.speakers.v1"
+    private let storageKey = "dialoguereader.speakers.v2"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -59,12 +59,18 @@ final class SpeakerStore: ObservableObject {
 
         speakers = decoded.map { speaker in
             var item = speaker
-            if let id = item.selectedVoiceIdentifier,
-               AVSpeechSynthesisVoice(identifier: id) == nil {
+            if item.engine == .sherpaOnnx {
+                item.engine = .appleSystem
+                item.sherpaVoiceID = nil
+            }
+            if let id = item.selectedVoiceIdentifier, AVSpeechSynthesisVoice(identifier: id) == nil {
                 item.selectedVoiceIdentifier = nil
             }
-            if item.engine == .appleSystem, item.selectedVoiceIdentifier == nil {
+            if item.selectedVoiceIdentifier == nil {
                 item.selectedVoiceIdentifier = bestDefaultVoiceIdentifier(for: item.preferredLanguageCode)
+            }
+            if item.preferredLanguageCode == nil {
+                item.preferredLanguageCode = "en-US"
             }
             return item
         }

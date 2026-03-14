@@ -9,7 +9,7 @@ enum SpeechEngineType: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
-        case .sherpaOnnx: return "Sherpa-ONNX (Offline)"
+        case .sherpaOnnx: return "Sherpa-ONNX"
         case .appleSystem: return "Apple System Voice"
         }
     }
@@ -21,14 +21,6 @@ enum SpeakerGender: String, CaseIterable, Codable, Identifiable {
     case likelyMale
 
     var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .unspecified: return "Unspecified"
-        case .likelyFemale: return "Likely Female"
-        case .likelyMale: return "Likely Male"
-        }
-    }
 }
 
 enum VoiceQualityPreference: String, CaseIterable, Codable, Identifiable {
@@ -40,7 +32,7 @@ enum VoiceQualityPreference: String, CaseIterable, Codable, Identifiable {
     var title: String {
         switch self {
         case .any: return "Any"
-        case .enhancedOnly: return "Enhanced Only"
+        case .enhancedOnly: return "Enhanced/Premium"
         }
     }
 }
@@ -59,70 +51,6 @@ struct Speaker: Identifiable, Hashable, Codable {
     var volume: Float
     var qualityPreference: VoiceQualityPreference
 
-    init(
-        id: UUID,
-        name: String,
-        engine: SpeechEngineType,
-        sherpaVoiceID: String?,
-        selectedVoiceIdentifier: String?,
-        preferredLanguageCode: String?,
-        genderGrouping: SpeakerGender,
-        speechRate: Float,
-        pitch: Float,
-        pauseAfterSegment: Double,
-        volume: Float,
-        qualityPreference: VoiceQualityPreference
-    ) {
-        self.id = id
-        self.name = name
-        self.engine = engine
-        self.sherpaVoiceID = sherpaVoiceID
-        self.selectedVoiceIdentifier = selectedVoiceIdentifier
-        self.preferredLanguageCode = preferredLanguageCode
-        self.genderGrouping = genderGrouping
-        self.speechRate = speechRate
-        self.pitch = pitch
-        self.pauseAfterSegment = pauseAfterSegment
-        self.volume = volume
-        self.qualityPreference = qualityPreference
-    }
-
-
-    enum CodingKeys: String, CodingKey {
-        case id, name, engine, sherpaVoiceID, selectedVoiceIdentifier, preferredLanguageCode, genderGrouping, speechRate, pitch, pauseAfterSegment, volume, qualityPreference
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(UUID.self, forKey: .id)
-        name = try c.decode(String.self, forKey: .name)
-        engine = try c.decodeIfPresent(SpeechEngineType.self, forKey: .engine) ?? .appleSystem
-        sherpaVoiceID = try c.decodeIfPresent(String.self, forKey: .sherpaVoiceID)
-        selectedVoiceIdentifier = try c.decodeIfPresent(String.self, forKey: .selectedVoiceIdentifier)
-        preferredLanguageCode = try c.decodeIfPresent(String.self, forKey: .preferredLanguageCode)
-        genderGrouping = try c.decodeIfPresent(SpeakerGender.self, forKey: .genderGrouping) ?? .unspecified
-        speechRate = try c.decodeIfPresent(Float.self, forKey: .speechRate) ?? AVSpeechUtteranceDefaultSpeechRate
-        pitch = try c.decodeIfPresent(Float.self, forKey: .pitch) ?? 1.0
-        pauseAfterSegment = try c.decodeIfPresent(Double.self, forKey: .pauseAfterSegment) ?? 0.2
-        volume = try c.decodeIfPresent(Float.self, forKey: .volume) ?? 1.0
-        qualityPreference = try c.decodeIfPresent(VoiceQualityPreference.self, forKey: .qualityPreference) ?? .any
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id, forKey: .id)
-        try c.encode(name, forKey: .name)
-        try c.encode(engine, forKey: .engine)
-        try c.encodeIfPresent(sherpaVoiceID, forKey: .sherpaVoiceID)
-        try c.encodeIfPresent(selectedVoiceIdentifier, forKey: .selectedVoiceIdentifier)
-        try c.encodeIfPresent(preferredLanguageCode, forKey: .preferredLanguageCode)
-        try c.encode(genderGrouping, forKey: .genderGrouping)
-        try c.encode(speechRate, forKey: .speechRate)
-        try c.encode(pitch, forKey: .pitch)
-        try c.encode(pauseAfterSegment, forKey: .pauseAfterSegment)
-        try c.encode(volume, forKey: .volume)
-        try c.encode(qualityPreference, forKey: .qualityPreference)
-    }
     var selectedVoice: AVSpeechSynthesisVoice? {
         guard let selectedVoiceIdentifier else { return nil }
         return AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier)
@@ -133,16 +61,16 @@ struct Speaker: Identifiable, Hashable, Codable {
             Speaker(
                 id: UUID(),
                 name: "Narrator",
-                engine: .sherpaOnnx,
-                sherpaVoiceID: "en-us-default",
+                engine: .appleSystem,
+                sherpaVoiceID: nil,
                 selectedVoiceIdentifier: nil,
-                preferredLanguageCode: nil,
+                preferredLanguageCode: "en-US",
                 genderGrouping: .unspecified,
                 speechRate: AVSpeechUtteranceDefaultSpeechRate,
                 pitch: 1.0,
                 pauseAfterSegment: 0.2,
                 volume: 1.0,
-                qualityPreference: .any
+                qualityPreference: .enhancedOnly
             ),
             Speaker(
                 id: UUID(),
@@ -150,13 +78,13 @@ struct Speaker: Identifiable, Hashable, Codable {
                 engine: .appleSystem,
                 sherpaVoiceID: nil,
                 selectedVoiceIdentifier: nil,
-                preferredLanguageCode: nil,
+                preferredLanguageCode: "en-US",
                 genderGrouping: .unspecified,
                 speechRate: AVSpeechUtteranceDefaultSpeechRate,
                 pitch: 1.0,
                 pauseAfterSegment: 0.2,
                 volume: 1.0,
-                qualityPreference: .any
+                qualityPreference: .enhancedOnly
             )
         ]
     }
