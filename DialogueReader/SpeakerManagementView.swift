@@ -56,9 +56,13 @@ struct SpeakerManagementView: View {
     }
 
     private func summary(for speaker: Speaker) -> String {
-        let voiceName = speaker.selectedVoice?.name ?? "System default"
-        let quality = speaker.selectedVoice?.qualityLabel ?? "Auto"
-        return "\(voiceName) • \(quality)"
+        if speaker.engine == .sherpaOnnx {
+            let neuralName = viewModel.availableNeuralVoices.first(where: { $0.id == speaker.sherpaVoiceID })?.displayName ?? "Natural Offline Voice"
+            return "\(neuralName) • Neural"
+        }
+
+        let voiceName = speaker.selectedVoice?.name ?? "System fallback"
+        return "\(voiceName) • Apple"
     }
 }
 
@@ -73,56 +77,50 @@ struct SpeakerEditorView: View {
                 Section("Profile") {
                     TextField("Name", text: $speaker.name)
 
-                    Picker("Engine", selection: $speaker.engine) {
+                    Picker("Voice Engine", selection: $speaker.engine) {
                         ForEach(viewModel.availableSpeechEngines) { engine in
                             Text(engine.title).tag(engine)
                         }
                     }
+
                     Text(viewModel.sherpaStatusMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     Picker("Language", selection: Binding(
-                        get: { speaker.preferredLanguageCode ?? "all" },
-                        set: { speaker.preferredLanguageCode = $0 == "all" ? nil : $0 }
+                        get: { speaker.preferredLanguageCode ?? "en-US" },
+                        set: { speaker.preferredLanguageCode = $0 }
                     )) {
-                        Text("All Languages").tag("all")
                         ForEach(viewModel.availableLanguageCodes, id: \.self) { language in
                             Text(viewModel.languageDisplayName(for: language)).tag(language)
                         }
                     }
-
-
-                    Picker("Quality", selection: $speaker.qualityPreference) {
-                        ForEach(VoiceQualityPreference.allCases) { preference in
-                            Text(preference.title).tag(preference)
-                        }
-                    }
-                }
-
-                Section("Voice Quality") {
-                    Text(viewModel.highQualityVoiceHint)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
 
                 Section("Voice") {
-                    if speaker.engine == .appleSystem {
-                    Picker("Voice", selection: Binding(
-                        get: { currentVoiceSelection(for: speaker) },
-                        set: { speaker.selectedVoiceIdentifier = $0 == "default" ? nil : $0 }
-                    )) {
-                        Text("System Best Match").tag("default")
-                        ForEach(viewModel.groupedVoices(for: speaker)) { group in
-                            Section(group.title) {
-                                ForEach(group.voices, id: \.identifier) { voice in
-                                    Text("\(voice.name) — \(viewModel.voiceSubtitle(for: voice))")
-                                        .tag(voice.identifier)
+                    if speaker.engine == .sherpaOnnx {
+                        Picker("Voice", selection: Binding(
+                            get: { speaker.sherpaVoiceID ?? viewModel.availableNeuralVoices.first?.id ?? "" },
+                            set: { speaker.sherpaVoiceID = $0 }
+                        )) {
+                            ForEach(viewModel.availableNeuralVoices) { voice in
+                                Text(voice.displayName).tag(voice.id)
+                            }
+                        }
+                    } else {
+                        Picker("Voice", selection: Binding(
+                            get: { currentVoiceSelection(for: speaker) },
+                            set: { speaker.selectedVoiceIdentifier = $0 == "default" ? nil : $0 }
+                        )) {
+                            Text("Apple Auto").tag("default")
+                            ForEach(viewModel.groupedVoices(for: speaker)) { group in
+                                Section(group.title) {
+                                    ForEach(group.voices, id: \.identifier) { voice in
+                                        Text(voice.name).tag(voice.identifier)
+                                    }
                                 }
                             }
                         }
-                    }
-
                     }
 
                     Button("Preview Voice") {
@@ -130,31 +128,35 @@ struct SpeakerEditorView: View {
                     }
                 }
 
-                Section("Speech") {
-                    VStack(alignment: .leading) {
-                        Text("Rate")
-                        Slider(value: Binding(
-                            get: { Double(speaker.speechRate) },
-                            set: { speaker.speechRate = Float($0) }
-                        ), in: 0.35...0.6)
-                    }
+                if speaker.engine == .appleSystem {
+                    Section("Apple Fallback Tuning") {
+                        VStack(alignment: .leading) {
+                            Text("Rate")
+                            Slider(value: Binding(
+                                get: { Double(speaker.speechRate) },
+                                set: { speaker.speechRate = Float($0) }
+                            ), in: 0.35...0.6)
+                        }
 
-                    VStack(alignment: .leading) {
-                        Text("Pitch")
-                        Slider(value: Binding(
-                            get: { Double(speaker.pitch) },
-                            set: { speaker.pitch = Float($0) }
-                        ), in: 0.7...1.4)
-                    }
+                        VStack(alignment: .leading) {
+                            Text("Pitch")
+                            Slider(value: Binding(
+                                get: { Double(speaker.pitch) },
+                                set: { speaker.pitch = Float($0) }
+                            ), in: 0.7...1.4)
+                        }
 
-                    VStack(alignment: .leading) {
-                        Text("Volume")
-                        Slider(value: Binding(
-                            get: { Double(speaker.volume) },
-                            set: { speaker.volume = Float($0) }
-                        ), in: 0...1)
+                        VStack(alignment: .leading) {
+                            Text("Volume")
+                            Slider(value: Binding(
+                                get: { Double(speaker.volume) },
+                                set: { speaker.volume = Float($0) }
+                            ), in: 0...1)
+                        }
                     }
+                }
 
+                Section("Pause") {
                     VStack(alignment: .leading) {
                         Text("Pause After Segment: \(speaker.pauseAfterSegment.formatted(.number.precision(.fractionLength(1))))s")
                         Slider(value: $speaker.pauseAfterSegment, in: 0...1)
@@ -171,11 +173,18 @@ struct SpeakerEditorView: View {
                         var sanitized = speaker
                         let trimmed = sanitized.name.trimmingCharacters(in: .whitespacesAndNewlines)
                         sanitized.name = trimmed.isEmpty ? "Speaker" : trimmed
+
                         if sanitized.engine == .appleSystem,
                            let identifier = sanitized.selectedVoiceIdentifier,
                            AVSpeechSynthesisVoice(identifier: identifier) == nil {
                             sanitized.selectedVoiceIdentifier = nil
                         }
+
+                        if sanitized.engine == .sherpaOnnx,
+                           viewModel.availableNeuralVoices.contains(where: { $0.id == sanitized.sherpaVoiceID }) == false {
+                            sanitized.sherpaVoiceID = viewModel.availableNeuralVoices.first?.id
+                        }
+
                         viewModel.saveSpeaker(sanitized)
                         dismiss()
                     }
@@ -192,5 +201,4 @@ struct SpeakerEditorView: View {
         let validIDs = Set(viewModel.voices(for: speaker).map(\.identifier))
         return validIDs.contains(selected) ? selected : "default"
     }
-
 }

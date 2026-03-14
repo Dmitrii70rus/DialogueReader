@@ -1,16 +1,30 @@
 # Sherpa-ONNX Integration Status
 
-## Current build status
-- A `SherpaOnnxEngine` scaffold file exists in the codebase.
-- **Sherpa runtime and model assets are not linked in this repository build yet.**
-- To avoid misleading UX, Sherpa is now hidden from speaker engine selection UI.
-- App playback/export currently use Apple offline `AVSpeechSynthesizer` only.
+## Implemented architecture
+- Added `TTSModelManager` for neural model catalog/loading from bundle path `Models/TTS/`.
+- Added neural voice catalog entries:
+  - `female-natural`
+  - `male-natural`
+  - `female-warm`
+  - `male-deep`
+- Speaker configuration now presents **Natural Offline Voice (Recommended)** as primary engine and Apple as fallback.
+- `DialogueReaderViewModel` routes playback to Sherpa first when neural models and runtime are available.
 
-## Why Sherpa is hidden
-A selectable Sherpa option without linked runtime/models caused false expectations and fallback behavior. The app now shows an explicit status note in the speaker editor instead of a fake selectable path.
+## Current blocker in this repo build
+- The environment cannot fetch/link sherpa binaries from GitHub (network tunnel to GitHub returns 403).
+- No actual `.onnx` + `.tokens` neural model files are bundled in this repository yet.
+- Therefore this build still falls back to Apple runtime playback.
 
-## What is needed for real Sherpa enablement
-1. Link a real sherpa-onnx iOS runtime package/framework in Xcode.
-2. Bundle at least one compatible local TTS model/voice.
-3. Implement concrete synthesis in `SherpaOnnxEngine.synthesizeToWav`.
-4. Re-enable Sherpa in `availableSpeechEngines` only when runtime+model checks pass.
+## Required model file structure
+Place bundled files in app target:
+- `Models/TTS/female-natural.onnx`
+- `Models/TTS/female-natural.tokens`
+- `Models/TTS/male-natural.onnx`
+- `Models/TTS/male-natural.tokens`
+- `Models/TTS/female-warm.onnx`
+- `Models/TTS/female-warm.tokens`
+- `Models/TTS/male-deep.onnx`
+- `Models/TTS/male-deep.tokens`
+
+## Remaining step for real synthesis
+Implement concrete sherpa synthesis call in `SherpaOnnxEngine.synthesizeToWav` once sherpa package+models are linked in Xcode.

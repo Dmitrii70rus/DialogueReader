@@ -18,8 +18,8 @@ final class SpeakerStore: ObservableObject {
         let speaker = Speaker(
             id: UUID(),
             name: "Speaker \(speakers.count + 1)",
-            engine: .appleSystem,
-            sherpaVoiceID: nil,
+            engine: TTSModelManager.shared.isNeuralReady ? .sherpaOnnx : .appleSystem,
+            sherpaVoiceID: TTSModelManager.shared.neuralVoices.first?.id,
             selectedVoiceIdentifier: bestDefaultVoiceIdentifier(),
             preferredLanguageCode: "en-US",
             genderGrouping: .unspecified,
@@ -59,7 +59,8 @@ final class SpeakerStore: ObservableObject {
 
         speakers = decoded.map { speaker in
             var item = speaker
-            if item.engine == .sherpaOnnx {
+            if item.engine == .sherpaOnnx,
+               TTSModelManager.shared.isNeuralReady == false {
                 item.engine = .appleSystem
                 item.sherpaVoiceID = nil
             }

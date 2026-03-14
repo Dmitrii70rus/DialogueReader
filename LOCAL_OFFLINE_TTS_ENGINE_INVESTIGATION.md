@@ -1,16 +1,17 @@
 # Local Offline TTS Engine Notes
 
-## Implemented now
-- Reliable offline Apple TTS path for playback.
-- Real local export path to `.caf` audio using `AVSpeechSynthesizer.write`.
-- Speaker-level voice/language/quality tuning persisted locally.
+## Current app architecture
+- Primary engine in UI: **Natural Offline Voice (Recommended)**.
+- Fallback engine: Apple system voice.
+- `TTSModelManager` scans bundled neural model files from `Models/TTS/`.
 
-## Not yet implemented in this repo build
-- Real Sherpa-ONNX runtime synthesis.
-- Bundled Sherpa model assets.
+## Why fallback is currently active
+- sherpa runtime is not linked in the current repository build.
+- neural model assets are not currently present in the app bundle.
+- fallback to Apple is automatic to keep playback/export functional.
 
-## Product integrity rule applied
-Sherpa is **not shown as selectable** unless runtime + model assets are actually linked. This avoids fake engine selection.
-
-## Next concrete step
-Integrate sherpa runtime and bundle model files, then enable engine selection conditionally based on runtime availability checks.
+## Next integration step
+1. Add sherpa iOS package/framework.
+2. Bundle at least 2 neural model pairs (`.onnx` + `.tokens`) under `Models/TTS/`.
+3. Wire `SherpaOnnxEngine.synthesizeToWav` to real sherpa API.
+4. Validate preview/dialogue/export with neural voices.

@@ -38,6 +38,7 @@ final class DialogueReaderViewModel: ObservableObject {
     private let purchaseManager: PurchaseManager
     private let speakerStore: SpeakerStore
     private let exportManager: DialogueExportManaging
+    private let modelManager: TTSModelManager
     private let cachedVoices: [AVSpeechSynthesisVoice]
     private var playbackTask: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
@@ -50,6 +51,7 @@ final class DialogueReaderViewModel: ObservableObject {
         self.purchaseManager = purchaseManager
         self.speakerStore = speakerStore
         self.exportManager = exportManager
+        self.modelManager = .shared
         self.cachedVoices = AVSpeechSynthesisVoice.speechVoices()
         standardSpeakerID = speakerStore.speakers.first?.id
         autoAssignStartSpeakerID = speakerStore.speakers.first?.id
@@ -82,11 +84,15 @@ final class DialogueReaderViewModel: ObservableObject {
 
 
     var availableSpeechEngines: [SpeechEngineType] {
-        [.appleSystem]
+        modelManager.isNeuralReady ? [.sherpaOnnx, .appleSystem] : [.appleSystem]
     }
 
     var sherpaStatusMessage: String {
-        "Sherpa-ONNX is hidden in this build: runtime and bundled model assets are not linked yet."
+        modelManager.statusMessage
+    }
+
+    var availableNeuralVoices: [NeuralVoice] {
+        modelManager.neuralVoices
     }
 
     var availableVoices: [AVSpeechSynthesisVoice] {
@@ -327,6 +333,19 @@ final class DialogueReaderViewModel: ObservableObject {
 
 
     private func playTextWithSpeaker(text: String, speaker: Speaker) async {
+        if speaker.engine == .sherpaOnnx,
+           modelManager.isNeuralReady,
+           SherpaOnnxEngine.shared.isAvailable {
+            do {
+                let voiceID = speaker.sherpaVoiceID ?? modelManager.neuralVoices.first?.id ?? "female-natural"
+                let url = try await SherpaOnnxEngine.shared.synthesizeToWav(text: text, voiceID: voiceID)
+                await playbackManager.playAudioFile(url: url)
+                return
+            } catch {
+                userMessage = "Neural engine failed, switched to Apple fallback."
+            }
+        }
+
         await playbackManager.play(
             text: text,
             voice: resolvedVoice(for: speaker),

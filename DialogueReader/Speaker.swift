@@ -9,8 +9,8 @@ enum SpeechEngineType: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
-        case .sherpaOnnx: return "Sherpa-ONNX"
-        case .appleSystem: return "Apple System Voice"
+        case .sherpaOnnx: return "Natural Offline Voice (Recommended)"
+        case .appleSystem: return "Apple System Voice (Fallback)"
         }
     }
 }
@@ -61,8 +61,8 @@ struct Speaker: Identifiable, Hashable, Codable {
             Speaker(
                 id: UUID(),
                 name: "Narrator",
-                engine: .appleSystem,
-                sherpaVoiceID: nil,
+                engine: .sherpaOnnx,
+                sherpaVoiceID: "female-natural",
                 selectedVoiceIdentifier: nil,
                 preferredLanguageCode: "en-US",
                 genderGrouping: .unspecified,
@@ -75,8 +75,8 @@ struct Speaker: Identifiable, Hashable, Codable {
             Speaker(
                 id: UUID(),
                 name: "Speaker 2",
-                engine: .appleSystem,
-                sherpaVoiceID: nil,
+                engine: .sherpaOnnx,
+                sherpaVoiceID: "female-natural",
                 selectedVoiceIdentifier: nil,
                 preferredLanguageCode: "en-US",
                 genderGrouping: .unspecified,
