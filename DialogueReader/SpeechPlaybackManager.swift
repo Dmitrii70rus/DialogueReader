@@ -4,11 +4,24 @@ import Foundation
 
 @MainActor
 final class SpeechPlaybackManager: NSObject, ObservableObject {
-    @Published private(set) var isPlaying = false
-    @Published private(set) var isPaused = false
+    enum PlaybackState {
+        case idle
+        case playing
+        case paused
+    }
+
+    @Published private(set) var playbackState: PlaybackState = .idle
 
     private let synthesizer = AVSpeechSynthesizer()
     private var continuation: CheckedContinuation<Void, Never>?
+
+    var isPlaying: Bool {
+        playbackState != .idle
+    }
+
+    var isPaused: Bool {
+        playbackState == .paused
+    }
 
     override init() {
         super.init()
@@ -19,19 +32,20 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
         synthesizer.stopSpeaking(at: .immediate)
         continuation?.resume()
         continuation = nil
-        isPlaying = false
-        isPaused = false
+        playbackState = .idle
     }
 
     func pause() {
         guard synthesizer.isSpeaking else { return }
-        isPaused = synthesizer.pauseSpeaking(at: .word)
+        if synthesizer.pauseSpeaking(at: .word) {
+            playbackState = .paused
+        }
     }
 
     func resume() {
         guard synthesizer.isPaused else { return }
         synthesizer.continueSpeaking()
-        isPaused = false
+        playbackState = .playing
     }
 
     func play(text: String, voice: AVSpeechSynthesisVoice?, rate: Float, pitch: Float, volume: Float) async {
@@ -46,8 +60,7 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
         utterance.preUtteranceDelay = 0.02
         utterance.volume = min(max(volume, 0.0), 1.0)
 
-        isPlaying = true
-        isPaused = false
+        playbackState = .playing
         synthesizer.speak(utterance)
 
         await withCheckedContinuation { continuation in
@@ -59,24 +72,14 @@ final class SpeechPlaybackManager: NSObject, ObservableObject {
         continuation?.resume()
         continuation = nil
         if !synthesizer.isSpeaking {
-            isPlaying = false
-            isPaused = false
+            playbackState = .idle
         }
     }
 
     private func handleDidCancel() {
         continuation?.resume()
         continuation = nil
-        isPlaying = false
-        isPaused = false
-    }
-
-    private func handleDidPause() {
-        isPaused = true
-    }
-
-    private func handleDidContinue() {
-        isPaused = false
+        playbackState = .idle
     }
 }
 
@@ -95,13 +98,13 @@ extension SpeechPlaybackManager: AVSpeechSynthesizerDelegate {
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
-            self?.handleDidPause()
+            self?.playbackState = .paused
         }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
-            self?.handleDidContinue()
+            self?.playbackState = .playing
         }
     }
 }

@@ -33,18 +33,6 @@ struct ContentView: View {
                         .buttonStyle(.bordered)
 
                         Spacer()
-
-                        if viewModel.playbackManager.isPlaying {
-                            Button(viewModel.playbackManager.isPaused ? "Resume" : "Pause") {
-                                viewModel.togglePauseResume()
-                            }
-                            .buttonStyle(.bordered)
-
-                            Button("Stop") {
-                                viewModel.stopPlayback()
-                            }
-                            .buttonStyle(.bordered)
-                        }
                     }
 
                     if viewModel.selectedMode == .standard {
@@ -86,8 +74,6 @@ struct ContentView: View {
                 ForEach(viewModel.speakers) { speaker in
                     Text(speaker.name).tag(speaker.id)
                 }
-                .padding()
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
             }
             .pickerStyle(.menu)
 
@@ -97,21 +83,40 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Button("Play") {
-                viewModel.playStandardNarration()
-            }
-            .pickerStyle(.menu)
+            narrationTransportControls
+        }
+    }
 
-            if viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text("Paste or type text, then tap Play.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+    private var narrationTransportControls: some View {
+        HStack {
+            switch viewModel.playbackManager.playbackState {
+            case .idle:
+                Button("Play Narration") {
+                    viewModel.playStandardNarration()
+                }
+                .buttonStyle(.borderedProminent)
+            case .playing:
+                Button("Pause") {
+                    viewModel.togglePauseResume()
+                }
+                .buttonStyle(.bordered)
 
-            Button("Play Narration") {
-                viewModel.playStandardNarration()
+                Button("Stop") {
+                    viewModel.stopPlayback()
+                }
+                .buttonStyle(.borderedProminent)
+            case .paused:
+                Button("Resume") {
+                    viewModel.togglePauseResume()
+                }
+                .buttonStyle(.bordered)
+
+                Button("Stop") {
+                    viewModel.stopPlayback()
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
+            Spacer()
         }
     }
 
@@ -124,14 +129,26 @@ struct ContentView: View {
                 Button("Split Into Segments") {
                     viewModel.splitTextIntoSegments()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
 
                 Spacer()
 
-                Button("Play Full Dialogue") {
-                    viewModel.playAllSegments()
+                if viewModel.playbackManager.playbackState == .idle {
+                    Button("Play Full Dialogue") {
+                        viewModel.playAllSegments()
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    Button(viewModel.playbackManager.playbackState == .paused ? "Resume" : "Pause") {
+                        viewModel.togglePauseResume()
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Stop") {
+                        viewModel.stopPlayback()
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
 
             if viewModel.segments.isEmpty {
