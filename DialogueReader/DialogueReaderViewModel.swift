@@ -38,6 +38,7 @@ final class DialogueReaderViewModel: ObservableObject {
     private let purchaseManager: PurchaseManager
     private let speakerStore: SpeakerStore
     private let exportManager: DialogueExportManaging
+    private let cachedVoices: [AVSpeechSynthesisVoice]
     private var playbackTask: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
 
@@ -49,6 +50,7 @@ final class DialogueReaderViewModel: ObservableObject {
         self.purchaseManager = purchaseManager
         self.speakerStore = speakerStore
         self.exportManager = exportManager
+        self.cachedVoices = AVSpeechSynthesisVoice.speechVoices()
         standardSpeakerID = speakerStore.speakers.first?.id
         autoAssignStartSpeakerID = speakerStore.speakers.first?.id
 
@@ -88,7 +90,7 @@ final class DialogueReaderViewModel: ObservableObject {
     }
 
     var availableVoices: [AVSpeechSynthesisVoice] {
-        AVSpeechSynthesisVoice.speechVoices().sorted { lhs, rhs in
+        cachedVoices.sorted { lhs, rhs in
             if lhs.language != rhs.language { return lhs.language < rhs.language }
             if lhs.quality != rhs.quality { return lhs.quality.rawValue > rhs.quality.rawValue }
             return lhs.name < rhs.name
@@ -127,20 +129,6 @@ final class DialogueReaderViewModel: ObservableObject {
         let locale = Locale.current.localizedString(forIdentifier: languageCode) ?? languageCode
         return "\(locale) (\(languageCode))"
     }
-
-    /// AVSpeechSynthesisVoice does not provide reliable explicit gender metadata.
-    /// We keep this clearly heuristic for browsing assistance only.
-    func inferredGender(for voice: AVSpeechSynthesisVoice) -> SpeakerGender {
-        let value = "\(voice.name.lowercased()) \(voice.identifier.lowercased())"
-        if value.contains("female") || value.contains("woman") {
-            return .likelyFemale
-        }
-        if value.contains("male") || value.contains("man") {
-            return .likelyMale
-        }
-        return .unspecified
-    }
-
     func voices(for speaker: Speaker) -> [AVSpeechSynthesisVoice] {
         availableVoices.filter { voice in
             let languageMatch: Bool = {

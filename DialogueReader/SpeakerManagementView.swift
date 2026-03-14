@@ -109,7 +109,7 @@ struct SpeakerEditorView: View {
                 Section("Voice") {
                     if speaker.engine == .appleSystem {
                     Picker("Voice", selection: Binding(
-                        get: { speaker.selectedVoiceIdentifier ?? "default" },
+                        get: { currentVoiceSelection(for: speaker) },
                         set: { speaker.selectedVoiceIdentifier = $0 == "default" ? nil : $0 }
                     )) {
                         Text("System Best Match").tag("default")
@@ -183,4 +183,14 @@ struct SpeakerEditorView: View {
             }
         }
     }
+
+    private func currentVoiceSelection(for speaker: Speaker) -> String {
+        guard let selected = speaker.selectedVoiceIdentifier else {
+            return "default"
+        }
+
+        let validIDs = Set(viewModel.voices(for: speaker).map(\.identifier))
+        return validIDs.contains(selected) ? selected : "default"
+    }
+
 }
